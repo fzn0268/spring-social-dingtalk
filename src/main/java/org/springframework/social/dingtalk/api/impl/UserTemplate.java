@@ -7,6 +7,9 @@ import com.dingtalk.api.response.OapiSnsGetuserinfoResponse;
 import org.springframework.social.dingtalk.api.DingTalk;
 import org.springframework.social.dingtalk.api.UserOperations;
 import org.springframework.social.dingtalk.util.DingTalkApiUriUtil;
+import org.springframework.social.support.URIBuilder;
+import org.springframework.util.LinkedMultiValueMap;
+import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestTemplate;
 
 public class UserTemplate implements UserOperations {
@@ -29,6 +32,8 @@ public class UserTemplate implements UserOperations {
         final String snsToken = dingTalk.requestForOrRenewSnsToken();
         final OapiSnsGetuserinfoRequest getUserInfoRequest = new OapiSnsGetuserinfoRequest();
         getUserInfoRequest.setSnsToken(snsToken);
-        return restTemplate.getForObject(DingTalkApiUriUtil.buildUri("/sns/getuserinfo"), OapiSnsGetuserinfoResponse.class, getUserInfoRequest.getTextParams());
+        final MultiValueMap<String, String> queryParams = new LinkedMultiValueMap<>();
+        getUserInfoRequest.getTextParams().forEach(queryParams::add);
+        return restTemplate.getForObject(URIBuilder.fromUri(DingTalkApiUriUtil.buildUri("/sns/getuserinfo")).queryParams(queryParams).build().toString(), OapiSnsGetuserinfoResponse.class);
     }
 }

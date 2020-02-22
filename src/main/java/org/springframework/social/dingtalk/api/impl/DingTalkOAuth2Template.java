@@ -11,24 +11,31 @@ import org.springframework.http.converter.HttpMessageConverter;
 import org.springframework.http.converter.json.Jackson2ObjectMapperBuilder;
 import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
 import org.springframework.social.dingtalk.api.DingTalkOAuth2Operations;
-import org.springframework.social.dingtalk.util.DingTalkApiUriUtil;
-import org.springframework.social.oauth2.*;
+import org.springframework.social.oauth2.AccessGrant;
+import org.springframework.social.oauth2.GrantType;
+import org.springframework.social.oauth2.OAuth2Parameters;
+import org.springframework.social.oauth2.OAuth2Template;
 import org.springframework.social.support.ClientHttpRequestFactorySelector;
-import org.springframework.social.support.FormMapHttpMessageConverter;
 import org.springframework.social.support.LoggingErrorHandler;
+import org.springframework.social.support.URIBuilder;
 import org.springframework.util.Assert;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.util.StringUtils;
+import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 
 import java.io.UnsupportedEncodingException;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
-public class DingTalkOAuth2Template implements DingTalkOAuth2Operations {
+public class DingTalkOAuth2Template extends OAuth2Template implements DingTalkOAuth2Operations {
     private static final long TIMEOUT_ACCESS_TOKEN = TimeUnit.HOURS.toMillis(2);
 
     private final String appId;
@@ -41,13 +48,11 @@ public class DingTalkOAuth2Template implements DingTalkOAuth2Operations {
 
     private volatile long lastAccessTokenReqTime;
 
-    private final String getPersistentCodeUrl;
-
     private final String authorizeUrl;
 
     private String authenticateUrl;
 
-    private RestTemplate restTemplate;
+    private final String getPersistentCodeUrl;
 
     /**
      * Constructs an OAuth2Template for a given set of client credentials.
@@ -70,6 +75,7 @@ public class DingTalkOAuth2Template implements DingTalkOAuth2Operations {
      * @param accessTokenUrl the URL at which an authorization code, refresh token, or user credentials may be exchanged for an access token
      */
     public DingTalkOAuth2Template(String appId, String appSecret, String authorizeUrl, String authenticateUrl, String accessTokenUrl, String getPersistentCodeUrl) {
+        super(appId, appSecret, authorizeUrl, authenticateUrl, accessTokenUrl);
         Assert.notNull(appId, "The clientId property cannot be null");
         Assert.notNull(appSecret, "The clientSecret property cannot be null");
         Assert.notNull(authorizeUrl, "The authorizeUrl property cannot be null");
@@ -85,16 +91,6 @@ public class DingTalkOAuth2Template implements DingTalkOAuth2Operations {
         }
         this.accessTokenUrl = accessTokenUrl;
         this.getPersistentCodeUrl = getPersistentCodeUrl;
-    }
-
-    /**
-     * Set the request factory on the underlying RestTemplate.
-     * This can be used to plug in a different HttpClient to do things like configure custom SSL settings.
-     * @param requestFactory the request factory used by the underlying RestTemplate
-     */
-    public void setRequestFactory(ClientHttpRequestFactory requestFactory) {
-        Assert.notNull(requestFactory, "The requestFactory property cannot be null");
-        getRestTemplate().setRequestFactory(requestFactory);
     }
 
     public String buildAuthorizeUrl(OAuth2Parameters parameters) {
@@ -114,68 +110,23 @@ public class DingTalkOAuth2Template implements DingTalkOAuth2Operations {
     }
 
     public AccessGrant exchangeForAccess(String authorizationCode, String redirectUri, MultiValueMap<String, String> additionalParameters) {
-        MultiValueMap<String, String> params = new LinkedMultiValueMap<String, String>();
-//        params.set("appid", appId);
-//        params.set("appsecret", appSecret);
-//        params.set("tmp_auth_code", authorizationCode);
-//        params.set("redirect_uri", redirectUri);
-//        params.set("grant_type", "authorization_code");
-//        if (additionalParameters != null) {
-//            params.putAll(additionalParameters);
-//        }
         final OapiSnsGetPersistentCodeRequest persistentCodeRequest = new OapiSnsGetPersistentCodeRequest();
         persistentCodeRequest.setTmpAuthCode(authorizationCode);
-        for (Map.Entry<String, String> entry : persistentCodeRequest.getTextParams().entrySet()) {
-            params.add(entry.getKey(), entry.getValue());
-        }
+        final LinkedMultiValueMap<String, String> params = new LinkedMultiValueMap<>();
+        persistentCodeRequest.getTextParams().forEach(params::add);
         return postForAccessGrant(getPersistentCodeUrl, params);
     }
-
 
     public AccessGrant exchangeCredentialsForAccess(String username, String password, MultiValueMap<String, String> additionalParameters) {
-        MultiValueMap<String, String> params = new LinkedMultiValueMap<String, String>();
-        params.set("appid", appId);
-        params.set("appsecret", appSecret);
-        params.set("username", username);
-        params.set("password", password);
-        params.set("grant_type", "password");
-        if (additionalParameters != null) {
-            params.putAll(additionalParameters);
-        }
-        return postForAccessGrant(getPersistentCodeUrl, params);
-    }
-
-    @Deprecated
-    public AccessGrant refreshAccess(String refreshToken, String scope, MultiValueMap<String, String> additionalParameters) {
-        additionalParameters.set("scope", scope);
-        return refreshAccess(refreshToken, additionalParameters);
+        throw new UnsupportedOperationException();
     }
 
     public AccessGrant refreshAccess(String refreshToken, MultiValueMap<String, String> additionalParameters) {
-        MultiValueMap<String, String> params = new LinkedMultiValueMap<String, String>();
-        params.set("appid", appId);
-        params.set("appsecret", appSecret);
-        params.set("refresh_token", refreshToken);
-        params.set("grant_type", "refresh_token");
-        if (additionalParameters != null) {
-            params.putAll(additionalParameters);
-        }
-        return postForAccessGrant(getPersistentCodeUrl, params);
-    }
-
-    public AccessGrant authenticateClient() {
-        return authenticateClient(null);
+        throw new UnsupportedOperationException();
     }
 
     public AccessGrant authenticateClient(String scope) {
-        MultiValueMap<String, String> params = new LinkedMultiValueMap<String, String>();
-        params.set("appid", appId);
-        params.set("appsecret", appSecret);
-        params.set("grant_type", "client_credentials");
-        if (scope != null) {
-            params.set("scope", scope);
-        }
-        return postForAccessGrant(getPersistentCodeUrl, params);
+        throw new UnsupportedOperationException();
     }
 
     // subclassing hooks
@@ -192,7 +143,6 @@ public class DingTalkOAuth2Template implements DingTalkOAuth2Operations {
         RestTemplate restTemplate = new RestTemplate(requestFactory);
         List<HttpMessageConverter<?>> converters = new ArrayList<HttpMessageConverter<?>>(2);
         converters.add(new FormHttpMessageConverter());
-        converters.add(new FormMapHttpMessageConverter());
         converters.add(new MappingJackson2HttpMessageConverter(Jackson2ObjectMapperBuilder.json().propertyNamingStrategy(PropertyNamingStrategy.SNAKE_CASE).build()));
         restTemplate.setMessageConverters(converters);
         restTemplate.setErrorHandler(new LoggingErrorHandler());
@@ -213,24 +163,29 @@ public class DingTalkOAuth2Template implements DingTalkOAuth2Operations {
     @SuppressWarnings("unchecked")
     protected AccessGrant postForAccessGrant(String getPersistentCodeUrl, MultiValueMap<String, String> parameters) {
         requestForOrRenewAccessToken();
-        final Map<String, String> queryParams = new HashMap<>();
-        queryParams.put("access_token", accessToken);
-        return extractAccessGrant(getRestTemplate().postForObject(getPersistentCodeUrl, parameters, OapiSnsGetPersistentCodeResponse.class, queryParams));
-    }
-
-    protected AccessGrant createAccessGrant(OapiSnsGetPersistentCodeResponse persistentCodeResponse) {
-        return new AccessGrant(persistentCodeResponse.getOpenid() + ":" + persistentCodeResponse.getUnionid() + ":" + persistentCodeResponse.getPersistentCode());
-    }
-
-    // testing hooks
-
-    protected RestTemplate getRestTemplate() {
-        // Lazily create RestTemplate to make sure all parameters have had a chance to be set.
-        // Can't do this InitializingBean.afterPropertiesSet() because it will often be created directly and not as a bean.
-        if (restTemplate == null) {
-            restTemplate = createRestTemplate();
+        final MultiValueMap<String, String> queryParams = new LinkedMultiValueMap<>();
+        queryParams.add("access_token", accessToken);
+        final Map<String, String> params = parameters.entrySet().stream().collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().get(0)));
+        final OapiSnsGetPersistentCodeResponse resp = getRestTemplate().postForObject(URIBuilder.fromUri(getPersistentCodeUrl).queryParams(queryParams).build().toString(), params, OapiSnsGetPersistentCodeResponse.class);
+        if (resp == null) {
+            throw new RestClientException("access token endpoint returned empty result");
         }
-        return restTemplate;
+        return createAccessGrant(concatenateAccessToken(resp), null, null, null, null);
+    }
+
+    @Override
+    public String concatenateAccessToken(OapiSnsGetPersistentCodeResponse persistentCodeResponse) {
+        return persistentCodeResponse.getOpenid() + ":" + persistentCodeResponse.getUnionid() + ":" + persistentCodeResponse.getPersistentCode();
+    }
+
+    @Override
+    public OapiSnsGetPersistentCodeResponse splitAccessToken(String accessToken) {
+        final OapiSnsGetPersistentCodeResponse persistentCodeResponse = new OapiSnsGetPersistentCodeResponse();
+        final String[] split = accessToken.split(":");
+        persistentCodeResponse.setOpenid(split[0]);
+        persistentCodeResponse.setUnionid(split[1]);
+        persistentCodeResponse.setPersistentCode(split[2]);
+        return persistentCodeResponse;
     }
 
     // internal helpers
@@ -240,7 +195,7 @@ public class DingTalkOAuth2Template implements DingTalkOAuth2Operations {
         if (grantType == GrantType.AUTHORIZATION_CODE) {
             authUrl.append('&').append("response_type").append('=').append("code");
         } else if (grantType == GrantType.IMPLICIT_GRANT) {
-            authUrl.append('&').append("response_type").append('=').append("token");
+            throw new UnsupportedOperationException();
         }
         for (Iterator<Map.Entry<String, List<String>>> additionalParams = parameters.entrySet().iterator(); additionalParams.hasNext();) {
             Map.Entry<String, List<String>> param = additionalParams.next();
@@ -266,20 +221,19 @@ public class DingTalkOAuth2Template implements DingTalkOAuth2Operations {
         }
     }
 
-    private AccessGrant extractAccessGrant(OapiSnsGetPersistentCodeResponse resp) {
-        return createAccessGrant(resp);
-    }
-
     @Override
-    public void requestForOrRenewAccessToken() {
+    public String requestForOrRenewAccessToken() {
         if (lastAccessTokenReqTime != 0 && System.currentTimeMillis() - lastAccessTokenReqTime < TIMEOUT_ACCESS_TOKEN) {
-            return;
+            return accessToken;
         }
         final OapiSnsGettokenRequest getTokenRequest = new OapiSnsGettokenRequest();
         getTokenRequest.setAppid(appId);
         getTokenRequest.setAppsecret(appSecret);
-        final OapiSnsGettokenResponse getTokenResponse = getRestTemplate().getForObject(accessTokenUrl, OapiSnsGettokenResponse.class, getTokenRequest.getTextParams());
+        final MultiValueMap<String, String> queryParams = new LinkedMultiValueMap<>();
+        getTokenRequest.getTextParams().forEach(queryParams::add);
+        final OapiSnsGettokenResponse getTokenResponse = getRestTemplate().getForObject(URIBuilder.fromUri(accessTokenUrl).queryParams(queryParams).build().toString(), OapiSnsGettokenResponse.class);
         accessToken = getTokenResponse.getAccessToken();
         lastAccessTokenReqTime = System.currentTimeMillis();
+        return accessToken;
     }
 }
