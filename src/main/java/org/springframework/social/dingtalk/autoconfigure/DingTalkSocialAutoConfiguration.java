@@ -12,13 +12,15 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Scope;
 import org.springframework.context.annotation.ScopedProxyMode;
-import org.springframework.social.autoconfigure.SocialAutoConfigurerAdapter;
+import org.springframework.core.env.Environment;
+import org.springframework.social.UserIdSource;
 import org.springframework.social.autoconfigure.SocialWebAutoConfiguration;
+import org.springframework.social.config.annotation.ConnectionFactoryConfigurer;
 import org.springframework.social.config.annotation.EnableSocial;
+import org.springframework.social.config.annotation.SocialConfigurer;
 import org.springframework.social.config.annotation.SocialConfigurerAdapter;
-import org.springframework.social.connect.Connection;
-import org.springframework.social.connect.ConnectionFactory;
-import org.springframework.social.connect.ConnectionRepository;
+import org.springframework.social.connect.*;
+import org.springframework.social.connect.mem.InMemoryUsersConnectionRepository;
 import org.springframework.social.connect.web.GenericConnectionStatusView;
 import org.springframework.social.dingtalk.api.DingTalk;
 import org.springframework.social.dingtalk.connect.DingTalkConnectionFactory;
@@ -35,7 +37,7 @@ public class DingTalkSocialAutoConfiguration {
     @EnableSocial
     @EnableConfigurationProperties(DingTalkSocialProperties.class)
     @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
-    protected static class DingTalkConfigurerAdapter extends SocialAutoConfigurerAdapter {
+    protected static class DingTalkConfigurerAdapter implements SocialConfigurer {
         private final DingTalkSocialProperties properties;
 
         public DingTalkConfigurerAdapter(DingTalkSocialProperties properties) {
@@ -57,9 +59,23 @@ public class DingTalkSocialAutoConfiguration {
             return new GenericConnectionStatusView("dingtalk", "DingTalk");
         }
 
-        @Override
         protected ConnectionFactory<?> createConnectionFactory() {
             return new DingTalkConnectionFactory(properties.getAppId(), properties.getAppSecret(), properties.isQrCodeLogin(), properties.isPersistent());
+        }
+
+        @Override
+        public void addConnectionFactories(ConnectionFactoryConfigurer connectionFactoryConfigurer, Environment environment) {
+            connectionFactoryConfigurer.addConnectionFactory(createConnectionFactory());
+        }
+
+        @Override
+        public UserIdSource getUserIdSource() {
+            return null;
+        }
+
+        @Override
+        public UsersConnectionRepository getUsersConnectionRepository(ConnectionFactoryLocator connectionFactoryLocator) {
+            return new InMemoryUsersConnectionRepository(connectionFactoryLocator);
         }
     }
 }

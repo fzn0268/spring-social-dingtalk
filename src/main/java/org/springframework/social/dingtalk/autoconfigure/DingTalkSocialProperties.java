@@ -1,13 +1,32 @@
 package org.springframework.social.dingtalk.autoconfigure;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
-import org.springframework.social.autoconfigure.SocialProperties;
 
 @ConfigurationProperties(prefix = "spring.social.dingtalk")
-public class DingTalkSocialProperties extends SocialProperties {
+public class DingTalkSocialProperties {
+    private String appId;
+
+    private String appSecret;
+
     private boolean qrCodeLogin = true;
 
     private boolean persistent = false;
+
+    public String getAppId() {
+        return appId;
+    }
+
+    public void setAppId(String appId) {
+        this.appId = appId;
+    }
+
+    public String getAppSecret() {
+        return appSecret;
+    }
+
+    public void setAppSecret(String appSecret) {
+        this.appSecret = appSecret;
+    }
 
     public boolean isQrCodeLogin() {
         return qrCodeLogin;

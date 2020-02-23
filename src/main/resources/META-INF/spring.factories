@@ -1,3 +1,4 @@
 # Auto Configure
 org.springframework.boot.autoconfigure.EnableAutoConfiguration=\
-org.springframework.social.dingtalk.autoconfigure.DingTalkSocialAutoConfiguration
+  org.springframework.social.autoconfigure.SocialWebAutoConfiguration,\
+  org.springframework.social.dingtalk.autoconfigure.DingTalkSocialAutoConfiguration
