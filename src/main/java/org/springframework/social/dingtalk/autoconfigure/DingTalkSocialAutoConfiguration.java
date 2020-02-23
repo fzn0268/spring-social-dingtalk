@@ -60,7 +60,7 @@ public class DingTalkSocialAutoConfiguration {
         }
 
         protected ConnectionFactory<?> createConnectionFactory() {
-            return new DingTalkConnectionFactory(properties.getAppId(), properties.getAppSecret(), properties.isQrCodeLogin(), properties.isPersistent());
+            return new DingTalkConnectionFactory(properties.getAppId(), properties.getAppSecret(), properties.isQrCodeLogin(), properties.isUsingPersistentCode());
         }
 
         @Override
