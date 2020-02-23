@@ -10,7 +10,7 @@ public class DingTalkSocialProperties {
 
     private boolean qrCodeLogin = true;
 
-    private boolean persistent = false;
+    private boolean usingPersistentCode = false;
 
     public String getAppId() {
         return appId;
@@ -36,11 +36,11 @@ public class DingTalkSocialProperties {
         this.qrCodeLogin = qrCodeLogin;
     }
 
-    public boolean isPersistent() {
-        return persistent;
+    public boolean isUsingPersistentCode() {
+        return usingPersistentCode;
     }
 
-    public void setPersistent(boolean persistent) {
-        this.persistent = persistent;
+    public void setUsingPersistentCode(boolean usingPersistentCode) {
+        this.usingPersistentCode = usingPersistentCode;
     }
 }
