@@ -1,21 +1,22 @@
 package org.springframework.social.dingtalk.api.impl;
 
+import com.dingtalk.api.DefaultDingTalkClient;
 import com.dingtalk.api.request.OapiSnsGetSnsTokenRequest;
 import com.dingtalk.api.response.OapiSnsGetPersistentCodeResponse;
 import com.dingtalk.api.response.OapiSnsGetSnsTokenResponse;
 import com.fasterxml.jackson.databind.PropertyNamingStrategy;
 import org.springframework.http.converter.json.Jackson2ObjectMapperBuilder;
 import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
+import org.springframework.social.ApiException;
 import org.springframework.social.dingtalk.api.DingTalk;
 import org.springframework.social.dingtalk.api.DingTalkOAuth2Operations;
 import org.springframework.social.dingtalk.api.UserOperations;
+import org.springframework.social.dingtalk.util.AccessTokenUtil;
 import org.springframework.social.dingtalk.util.DingTalkApiUriUtil;
 import org.springframework.social.oauth2.AbstractOAuth2ApiBinding;
 import org.springframework.social.oauth2.TokenStrategy;
 import org.springframework.social.support.ClientHttpRequestFactorySelector;
 import org.springframework.social.support.URIBuilder;
-import org.springframework.util.LinkedMultiValueMap;
-import org.springframework.util.MultiValueMap;
 
 import java.util.concurrent.TimeUnit;
 
@@ -42,7 +43,7 @@ public class DingTalkTemplate extends AbstractOAuth2ApiBinding implements DingTa
         super(accessToken, TokenStrategy.ACCESS_TOKEN_PARAMETER);
         this.appId = appId;
         this.appSecret = appSecret;
-        final OapiSnsGetPersistentCodeResponse persistentCodeResponse = oAuthOperations.splitAccessToken(accessToken);
+        final OapiSnsGetPersistentCodeResponse persistentCodeResponse = AccessTokenUtil.splitAccessToken(accessToken);
         this.openId = persistentCodeResponse.getOpenid();
         this.persistentCode = persistentCodeResponse.getPersistentCode();
         this.oAuth2Operations = oAuthOperations;
@@ -61,7 +62,7 @@ public class DingTalkTemplate extends AbstractOAuth2ApiBinding implements DingTa
 
     private void initialize() {
         super.setRequestFactory(ClientHttpRequestFactorySelector.bufferRequests(getRestTemplate().getRequestFactory()));
-        userOperations = new UserTemplate(this, getRestTemplate());
+        userOperations = new UserTemplate(this);
     }
 
     @Override
@@ -70,13 +71,16 @@ public class DingTalkTemplate extends AbstractOAuth2ApiBinding implements DingTa
             return snsToken;
         }
         final String accessToken = oAuth2Operations.requestForOrRenewAccessToken();
-        final OapiSnsGetSnsTokenRequest getSnsTokenRequest = new OapiSnsGetSnsTokenRequest();
-        getSnsTokenRequest.setOpenid(openId);
-        getSnsTokenRequest.setPersistentCode(persistentCode);
-        final MultiValueMap<String, String> queryParams = new LinkedMultiValueMap<>();
-        queryParams.add("access_token", accessToken);
-        final OapiSnsGetSnsTokenResponse snsTokenResponse = getRestTemplate().postForObject(URIBuilder.fromUri(DingTalkApiUriUtil.buildUri("/sns/get_sns_token")).queryParams(queryParams).build().toString(), getSnsTokenRequest, OapiSnsGetSnsTokenResponse.class);
-        snsToken = snsTokenResponse.getSnsToken();
+        final OapiSnsGetSnsTokenRequest snsTokenRequest = new OapiSnsGetSnsTokenRequest();
+        snsTokenRequest.setOpenid(openId);
+        snsTokenRequest.setPersistentCode(persistentCode);
+        final DefaultDingTalkClient dingTalkClient = new DefaultDingTalkClient(URIBuilder.fromUri(DingTalkApiUriUtil.buildUri("/sns/get_sns_token")).build().toString());
+        try {
+            final OapiSnsGetSnsTokenResponse snsTokenResponse = dingTalkClient.execute(snsTokenRequest, accessToken);
+            snsToken = snsTokenResponse.getSnsToken();
+        } catch (com.taobao.api.ApiException e) {
+            throw new ApiException("dingtalk", "Failed to request for sns token", e);
+        }
         lastSnsTokenReqTime = System.currentTimeMillis();
         return snsToken;
     }

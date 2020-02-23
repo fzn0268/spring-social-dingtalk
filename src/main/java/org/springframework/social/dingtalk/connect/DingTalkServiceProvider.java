@@ -12,8 +12,8 @@ public class DingTalkServiceProvider extends AbstractOAuth2ServiceProvider<DingT
 
     private String appSecret;
 
-    public DingTalkServiceProvider(String appId, String appSecret) {
-        super(new DingTalkOAuth2Template(appId, appSecret, DingTalkApiUriUtil.buildUri("/connect/oauth2/sns_authorize"), DingTalkApiUriUtil.buildUri("/sns/gettoken"), DingTalkApiUriUtil.buildUri("/sns/get_persistent_code")));
+    public DingTalkServiceProvider(String appId, String appSecret, boolean qrCodeLogin, boolean persistent) {
+        super(new DingTalkOAuth2Template(appId, appSecret, DingTalkApiUriUtil.buildUri("/connect" + (qrCodeLogin ? "/qrconnect" : "/oauth2/sns_authorize")), DingTalkApiUriUtil.buildUri("/sns/gettoken"), persistent));
         this.appId = appId;
         this.appSecret = appSecret;
     }

@@ -1,39 +1,32 @@
 package org.springframework.social.dingtalk.api.impl;
 
+import com.dingtalk.api.DefaultDingTalkClient;
 import com.dingtalk.api.request.OapiSnsGetPersistentCodeRequest;
 import com.dingtalk.api.request.OapiSnsGettokenRequest;
+import com.dingtalk.api.request.OapiSnsGetuserinfoBycodeRequest;
 import com.dingtalk.api.response.OapiSnsGetPersistentCodeResponse;
 import com.dingtalk.api.response.OapiSnsGettokenResponse;
-import com.fasterxml.jackson.databind.PropertyNamingStrategy;
-import org.springframework.http.client.ClientHttpRequestFactory;
-import org.springframework.http.converter.FormHttpMessageConverter;
-import org.springframework.http.converter.HttpMessageConverter;
-import org.springframework.http.converter.json.Jackson2ObjectMapperBuilder;
-import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
+import com.dingtalk.api.response.OapiSnsGetuserinfoBycodeResponse;
+import org.springframework.social.ApiException;
 import org.springframework.social.dingtalk.api.DingTalkOAuth2Operations;
+import org.springframework.social.dingtalk.util.AccessTokenUtil;
+import org.springframework.social.dingtalk.util.DingTalkApiUriUtil;
 import org.springframework.social.oauth2.AccessGrant;
 import org.springframework.social.oauth2.GrantType;
 import org.springframework.social.oauth2.OAuth2Parameters;
 import org.springframework.social.oauth2.OAuth2Template;
-import org.springframework.social.support.ClientHttpRequestFactorySelector;
-import org.springframework.social.support.LoggingErrorHandler;
 import org.springframework.social.support.URIBuilder;
 import org.springframework.util.Assert;
-import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.util.StringUtils;
-import org.springframework.web.client.RestClientException;
-import org.springframework.web.client.RestTemplate;
 
 import java.io.UnsupportedEncodingException;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
-import java.util.stream.Collectors;
 
 public class DingTalkOAuth2Template extends OAuth2Template implements DingTalkOAuth2Operations {
     private static final long TIMEOUT_ACCESS_TOKEN = TimeUnit.HOURS.toMillis(2);
@@ -52,7 +45,11 @@ public class DingTalkOAuth2Template extends OAuth2Template implements DingTalkOA
 
     private String authenticateUrl;
 
+    private boolean persistent;
+
     private final String getPersistentCodeUrl;
+
+    private final String getUserInfoByCodeUrl;
 
     /**
      * Constructs an OAuth2Template for a given set of client credentials.
@@ -62,8 +59,8 @@ public class DingTalkOAuth2Template extends OAuth2Template implements DingTalkOA
      * @param authorizeUrl the base URL to redirect to when doing authorization code or implicit grant authorization
      * @param accessTokenUrl the URL at which an authorization code, refresh token, or user credentials may be exchanged for an access token.
      */
-    public DingTalkOAuth2Template(String appId, String appSecret, String authorizeUrl, String accessTokenUrl, String getPersistentCodeUrl) {
-        this(appId, appSecret, authorizeUrl, null, accessTokenUrl, getPersistentCodeUrl);
+    public DingTalkOAuth2Template(String appId, String appSecret, String authorizeUrl, String accessTokenUrl, boolean persistent) {
+        this(appId, appSecret, authorizeUrl, null, accessTokenUrl, DingTalkApiUriUtil.buildUri("/sns/get_persistent_code"), DingTalkApiUriUtil.buildUri("/sns/getuserinfo_bycode"), persistent);
     }
 
     /**
@@ -74,7 +71,7 @@ public class DingTalkOAuth2Template extends OAuth2Template implements DingTalkOA
      * @param authenticateUrl the URL to redirect to when doing authentication via authorization code grant
      * @param accessTokenUrl the URL at which an authorization code, refresh token, or user credentials may be exchanged for an access token
      */
-    public DingTalkOAuth2Template(String appId, String appSecret, String authorizeUrl, String authenticateUrl, String accessTokenUrl, String getPersistentCodeUrl) {
+    public DingTalkOAuth2Template(String appId, String appSecret, String authorizeUrl, String authenticateUrl, String accessTokenUrl, String getPersistentCodeUrl, String getUserInfoByCodeUrl, boolean persistent) {
         super(appId, appSecret, authorizeUrl, authenticateUrl, accessTokenUrl);
         Assert.notNull(appId, "The clientId property cannot be null");
         Assert.notNull(appSecret, "The clientSecret property cannot be null");
@@ -91,6 +88,8 @@ public class DingTalkOAuth2Template extends OAuth2Template implements DingTalkOA
         }
         this.accessTokenUrl = accessTokenUrl;
         this.getPersistentCodeUrl = getPersistentCodeUrl;
+        this.getUserInfoByCodeUrl = getUserInfoByCodeUrl;
+        this.persistent = persistent;
     }
 
     public String buildAuthorizeUrl(OAuth2Parameters parameters) {
@@ -110,11 +109,27 @@ public class DingTalkOAuth2Template extends OAuth2Template implements DingTalkOA
     }
 
     public AccessGrant exchangeForAccess(String authorizationCode, String redirectUri, MultiValueMap<String, String> additionalParameters) {
-        final OapiSnsGetPersistentCodeRequest persistentCodeRequest = new OapiSnsGetPersistentCodeRequest();
-        persistentCodeRequest.setTmpAuthCode(authorizationCode);
-        final LinkedMultiValueMap<String, String> params = new LinkedMultiValueMap<>();
-        persistentCodeRequest.getTextParams().forEach(params::add);
-        return postForAccessGrant(getPersistentCodeUrl, params);
+        if (persistent) {
+            requestForOrRenewAccessToken();
+            final OapiSnsGetPersistentCodeRequest persistentCodeRequest = new OapiSnsGetPersistentCodeRequest();
+            persistentCodeRequest.setTmpAuthCode(authorizationCode);
+            final DefaultDingTalkClient dingTalkClient = new DefaultDingTalkClient(URIBuilder.fromUri(getPersistentCodeUrl).build().toString());
+            try {
+                final OapiSnsGetPersistentCodeResponse persistentCodeResponse = dingTalkClient.execute(persistentCodeRequest, accessToken);
+                return new AccessGrant(AccessTokenUtil.concatenateAccessToken(persistentCodeResponse));
+            } catch (com.taobao.api.ApiException e) {
+                throw new ApiException("dingtalk", "Failed to request for persistent code", e);
+            }
+        }
+        final OapiSnsGetuserinfoBycodeRequest getUserInfoByCodeRequest = new OapiSnsGetuserinfoBycodeRequest();
+        getUserInfoByCodeRequest.setTmpAuthCode(authorizationCode);
+        final DefaultDingTalkClient dingTalkClient = new DefaultDingTalkClient(URIBuilder.fromUri(getUserInfoByCodeUrl).build().toString());
+        try {
+            final OapiSnsGetuserinfoBycodeResponse.UserInfo userInfo = dingTalkClient.execute(getUserInfoByCodeRequest, appId, appSecret).getUserInfo();
+            return new AccessGrant(AccessTokenUtil.concatenateAccessToken(userInfo));
+        } catch (com.taobao.api.ApiException e) {
+            throw new ApiException("dingtalk", "Failed to fetch user info", e);
+        }
     }
 
     public AccessGrant exchangeCredentialsForAccess(String username, String password, MultiValueMap<String, String> additionalParameters) {
@@ -127,65 +142,6 @@ public class DingTalkOAuth2Template extends OAuth2Template implements DingTalkOA
 
     public AccessGrant authenticateClient(String scope) {
         throw new UnsupportedOperationException();
-    }
-
-    // subclassing hooks
-
-    /**
-     * Creates the {@link RestTemplate} used to communicate with the provider's OAuth 2 API.
-     * This implementation creates a RestTemplate with a minimal set of HTTP message converters ({@link FormHttpMessageConverter} and {@link MappingJackson2HttpMessageConverter}).
-     * May be overridden to customize how the RestTemplate is created.
-     * For example, if the provider returns data in some format other than JSON for form-encoded, you might override to register an appropriate message converter.
-     * @return a {@link RestTemplate} used to communicate with the provider's OAuth 2 API
-     */
-    protected RestTemplate createRestTemplate() {
-        ClientHttpRequestFactory requestFactory = ClientHttpRequestFactorySelector.getRequestFactory();
-        RestTemplate restTemplate = new RestTemplate(requestFactory);
-        List<HttpMessageConverter<?>> converters = new ArrayList<HttpMessageConverter<?>>(2);
-        converters.add(new FormHttpMessageConverter());
-        converters.add(new MappingJackson2HttpMessageConverter(Jackson2ObjectMapperBuilder.json().propertyNamingStrategy(PropertyNamingStrategy.SNAKE_CASE).build()));
-        restTemplate.setMessageConverters(converters);
-        restTemplate.setErrorHandler(new LoggingErrorHandler());
-        return restTemplate;
-    }
-
-    /**
-     * Posts the request for an access grant to the provider.
-     * The default implementation uses RestTemplate to request the access token and expects a JSON response to be bound to a Map. The information in the Map will be used to create an {@link AccessGrant}.
-     * Since the OAuth 2 specification indicates that an access token response should be in JSON format, there's often no need to override this method.
-     * If all you need to do is capture provider-specific data in the response, you should override createAccessGrant() instead.
-     * However, in the event of a provider whose access token response is non-JSON, you may need to override this method to request that the response be bound to something other than a Map.
-     * For example, if the access token response is given as form-encoded, this method should be overridden to call RestTemplate.postForObject() asking for the response to be bound to a MultiValueMap (whose contents can then be used to create an AccessGrant).
-     * @param getPersistentCodeUrl the URL of the provider's access token endpoint.
-     * @param parameters the parameters to post to the access token endpoint.
-     * @return the access grant.
-     */
-    @SuppressWarnings("unchecked")
-    protected AccessGrant postForAccessGrant(String getPersistentCodeUrl, MultiValueMap<String, String> parameters) {
-        requestForOrRenewAccessToken();
-        final MultiValueMap<String, String> queryParams = new LinkedMultiValueMap<>();
-        queryParams.add("access_token", accessToken);
-        final Map<String, String> params = parameters.entrySet().stream().collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().get(0)));
-        final OapiSnsGetPersistentCodeResponse resp = getRestTemplate().postForObject(URIBuilder.fromUri(getPersistentCodeUrl).queryParams(queryParams).build().toString(), params, OapiSnsGetPersistentCodeResponse.class);
-        if (resp == null) {
-            throw new RestClientException("access token endpoint returned empty result");
-        }
-        return createAccessGrant(concatenateAccessToken(resp), null, null, null, null);
-    }
-
-    @Override
-    public String concatenateAccessToken(OapiSnsGetPersistentCodeResponse persistentCodeResponse) {
-        return persistentCodeResponse.getOpenid() + ":" + persistentCodeResponse.getUnionid() + ":" + persistentCodeResponse.getPersistentCode();
-    }
-
-    @Override
-    public OapiSnsGetPersistentCodeResponse splitAccessToken(String accessToken) {
-        final OapiSnsGetPersistentCodeResponse persistentCodeResponse = new OapiSnsGetPersistentCodeResponse();
-        final String[] split = accessToken.split(":");
-        persistentCodeResponse.setOpenid(split[0]);
-        persistentCodeResponse.setUnionid(split[1]);
-        persistentCodeResponse.setPersistentCode(split[2]);
-        return persistentCodeResponse;
     }
 
     // internal helpers
@@ -226,13 +182,16 @@ public class DingTalkOAuth2Template extends OAuth2Template implements DingTalkOA
         if (lastAccessTokenReqTime != 0 && System.currentTimeMillis() - lastAccessTokenReqTime < TIMEOUT_ACCESS_TOKEN) {
             return accessToken;
         }
-        final OapiSnsGettokenRequest getTokenRequest = new OapiSnsGettokenRequest();
-        getTokenRequest.setAppid(appId);
-        getTokenRequest.setAppsecret(appSecret);
-        final MultiValueMap<String, String> queryParams = new LinkedMultiValueMap<>();
-        getTokenRequest.getTextParams().forEach(queryParams::add);
-        final OapiSnsGettokenResponse getTokenResponse = getRestTemplate().getForObject(URIBuilder.fromUri(accessTokenUrl).queryParams(queryParams).build().toString(), OapiSnsGettokenResponse.class);
-        accessToken = getTokenResponse.getAccessToken();
+        final OapiSnsGettokenRequest tokenRequest = new OapiSnsGettokenRequest();
+        tokenRequest.setAppid(appId);
+        tokenRequest.setAppsecret(appSecret);
+        final DefaultDingTalkClient dingTalkClient = new DefaultDingTalkClient(URIBuilder.fromUri(accessTokenUrl).build().toString());
+        try {
+            final OapiSnsGettokenResponse getTokenResponse = dingTalkClient.execute(tokenRequest);
+            accessToken = getTokenResponse.getAccessToken();
+        } catch (com.taobao.api.ApiException e) {
+            throw new ApiException("dingtalk", "Failed to request for access token", e);
+        }
         lastAccessTokenReqTime = System.currentTimeMillis();
         return accessToken;
     }
