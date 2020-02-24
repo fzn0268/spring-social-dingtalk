@@ -37,7 +37,7 @@ import org.springframework.social.connect.ConnectionFactoryLocator;
 import org.springframework.social.connect.ConnectionRepository;
 import org.springframework.social.connect.UsersConnectionRepository;
 import org.springframework.social.connect.web.*;
-import org.springframework.social.connect.web.thymeleaf.SpringSocialDialect;
+import org.springframework.social.connect.web.thymeleaf3.SpringSocialDialect;
 import org.springframework.util.Assert;
 import org.springframework.util.CollectionUtils;
 import org.springframework.web.servlet.view.BeanNameViewResolver;
